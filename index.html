@@ -1,95 +1,40 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Tracker Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #191a1f; color: #e0e0e0; }
-        .accent-red { color: #ff4d4d; }
-        .bg-accent-red { background-color: #ff4d4d; }
-        .card { background: #25262c; border-left: 4px solid #ff4d4d; }
-        input, select, textarea { background: #2d2e36; border: 1px solid #3f3f46; color: white; }
-    </style>
-    <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbz8uozReM1oW3FFf_qNyW1uMOE5W9RSV7JGmZMB5z9W8eh5u1lVXFfwJvUGqHM7DufPOw/exec";
-
-// ... 前方的 createApp 與 data 部分保持不變 ...
-
-methods: {
-    // 儲存密碼並登入
-    saveAuth() {
-        if (!this.inputPassword) return alert("請輸入密碼");
-        localStorage.setItem('api_pwd', this.inputPassword);
-        this.isAuthenticated = true;
-        this.fetchTasks();
-    },
-
-    // 從 Google Sheet 抓取資料
-    async fetchTasks() {
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'read',
-                    password: localStorage.getItem('api_pwd')
-                })
-            });
-            const data = await response.json();
-            if (data.status === "error") {
-                alert("驗證失效，請重新輸入密碼");
-                this.clearAuth();
-            } else {
-                // 依據社群排序
-                this.tasks = data.sort((a, b) => a.community.localeCompare(b.community));
-            }
-        } catch (e) {
-            console.error("讀取失敗", e);
+        body {
+            background-color: #191a1f;
+            color: #e0e0e0;
         }
-    },
 
-    // 新增任務
-    async addTask(formData) {
-        const payload = {
-            action: 'add',
-            password: localStorage.getItem('api_pwd'),
-            ...formData // 包含 community, role, title, total, note
-        };
-        await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-        this.showAddModal = false;
-        this.fetchTasks(); // 重新整理
-    },
+        .accent-red {
+            color: #ff4d4d;
+        }
 
-    // 更新進度 (+1)
-    async updateProgress(task) {
-        if (task.current >= task.total) return;
-        
-        task.current += 1;
-        const payload = {
-            action: 'update',
-            password: localStorage.getItem('api_pwd'),
-            id: task.id,
-            current: task.current,
-            note: task.note
-        };
-        await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-    },
+        .bg-accent-red {
+            background-color: #ff4d4d;
+        }
 
-    // 刪除任務
-    async deleteTask(id) {
-        if (!confirm("確定要刪除此任務嗎？")) return;
-        const payload = {
-            action: 'delete',
-            password: localStorage.getItem('api_pwd'),
-            id: id
-        };
-        await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-        this.fetchTasks();
-    }
-}
-    </script>
+        .card {
+            background: #25262c;
+            border-left: 4px solid #ff4d4d;
+        }
+
+        input,
+        select,
+        textarea {
+            background: #2d2e36;
+            border: 1px solid #3f3f46;
+            color: white;
+        }
+    </style>
 </head>
+
 <body class="p-4 md:p-8">
     <div id="app" class="max-w-4xl mx-auto">
         <header class="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
@@ -110,7 +55,7 @@ methods: {
 
             <div v-for="(tasks, community) in groupedTasks" :key="community" class="mb-8">
                 <h2 class="text-xl font-bold mb-4 bg-gray-800 p-2 rounded">{{ community }}</h2>
-                
+
                 <div v-for="task in tasks" :key="task.id" class="card p-4 mb-3 rounded shadow-lg">
                     <div class="flex justify-between items-start">
                         <div>
@@ -122,16 +67,17 @@ methods: {
                             <div class="text-sm">{{ task.current }} / {{ task.total }}</div>
                         </div>
                     </div>
-                    
+
                     <div class="w-full bg-gray-700 h-2 rounded-full mt-3 overflow-hidden">
-                        <div class="bg-accent-red h-full transition-all" 
-                             :style="{width: (task.current/task.total*100) + '%'}"></div>
+                        <div class="bg-accent-red h-full transition-all"
+                            :style="{width: (task.current/task.total*100) + '%'}"></div>
                     </div>
 
                     <p class="text-xs text-gray-500 mt-2 italic">備註: {{ task.note || '無' }}</p>
-                    
+
                     <div class="mt-4 flex gap-2">
-                        <button @click="updateProgress(task, 1)" class="bg-gray-700 px-3 py-1 rounded text-sm">+1 進度</button>
+                        <button @click="updateProgress(task, 1)" class="bg-gray-700 px-3 py-1 rounded text-sm">+1
+                            進度</button>
                         <button @click="deleteTask(task.id)" class="text-gray-500 text-sm">刪除</button>
                     </div>
                 </div>
@@ -141,57 +87,82 @@ methods: {
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-        const { createApp } = Vue;
-        createApp({
-            data() {
-                return {
-                    isAuthenticated: false,
-                    inputPassword: '',
-                    tasks: [], // 模擬資料，實際對接 Apps Script
-                    showAddModal: false
+        const API_URL = "https://script.google.com/macros/s/AKfycbz8uozReM1oW3FFf_qNyW1uMOE5W9RSV7JGmZMB5z9W8eh5u1lVXFfwJvUGqHM7DufPOw/exec";
+
+        // ... 前方的 createApp 與 data 部分保持不變 ...
+
+        methods: {
+            // 儲存密碼並登入
+            saveAuth() {
+                if (!this.inputPassword) return alert("請輸入密碼");
+                localStorage.setItem('api_pwd', this.inputPassword);
+                this.isAuthenticated = true;
+                this.fetchTasks();
+            },
+
+    // 從 Google Sheet 抓取資料
+    async fetchTasks() {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'read',
+                            password: localStorage.getItem('api_pwd')
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.status === "error") {
+                        alert("驗證失效，請重新輸入密碼");
+                        this.clearAuth();
+                    } else {
+                        // 依據社群排序
+                        this.tasks = data.sort((a, b) => a.community.localeCompare(b.community));
+                    }
+                } catch (e) {
+                    console.error("讀取失敗", e);
                 }
             },
-            computed: {
-                groupedTasks() {
-                    // 依據社群平台進行排序與分組
-                    return this.tasks.reduce((acc, task) => {
-                        if (!acc[task.community]) acc[task.community] = [];
-                        acc[task.community].push(task);
-                        return acc;
-                    }, {});
-                }
+
+    // 新增任務
+    async addTask(formData) {
+                const payload = {
+                    action: 'add',
+                    password: localStorage.getItem('api_pwd'),
+                    ...formData // 包含 community, role, title, total, note
+                };
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                this.showAddModal = false;
+                this.fetchTasks(); // 重新整理
             },
-            mounted() {
-                const pwd = localStorage.getItem('api_pwd');
-                if (pwd) {
-                    this.isAuthenticated = true;
-                    this.fetchTasks();
-                }
+
+    // 更新進度 (+1)
+    async updateProgress(task) {
+                if (task.current >= task.total) return;
+
+                task.current += 1;
+                const payload = {
+                    action: 'update',
+                    password: localStorage.getItem('api_pwd'),
+                    id: task.id,
+                    current: task.current,
+                    note: task.note
+                };
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
             },
-            methods: {
-                saveAuth() {
-                    localStorage.setItem('api_pwd', this.inputPassword);
-                    this.isAuthenticated = true;
-                    this.fetchTasks();
-                },
-                clearAuth() {
-                    localStorage.removeItem('api_pwd');
-                    location.reload();
-                },
-                fetchTasks() {
-                    // 這裡執行 fetch(API_URL, { method: 'POST', body: ... })
-                    // 暫以 Demo 資料呈現
-                    this.tasks = [
-                        { id: 1, community: 'Discord', role: '管理員', title: '每日巡邏', total: 5, current: 2, note: '' },
-                        { id: 2, community: 'Discord', role: '玩家', title: '簽到', total: 1, current: 1, note: '已領取獎勵' },
-                        { id: 3, community: 'Facebook', role: '小編', title: '發布貼文', total: 3, current: 0, note: '素材製作中' }
-                    ];
-                },
-                updateProgress(task, val) {
-                    if(task.current < task.total) task.current += val;
-                }
+
+    // 刪除任務
+    async deleteTask(id) {
+                if (!confirm("確定要刪除此任務嗎？")) return;
+                const payload = {
+                    action: 'delete',
+                    password: localStorage.getItem('api_pwd'),
+                    id: id
+                };
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                this.fetchTasks();
             }
-        }).mount('#app');
+        }
     </script>
 </body>
+
 </html>
