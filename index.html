@@ -1,139 +1,43 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Tracker Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
-        body {
-            background-color: #191a1f;
-            color: #e0e0e0;
-        }
-
-        .accent-red {
-            color: #ff4d4d;
-        }
-
-        .bg-accent-red {
-            background-color: #ff4d4d;
-        }
-
-        .card {
-            background: #25262c;
-            border-left: 4px solid #ff4d4d;
-        }
-
-        input,
-        select,
-        textarea {
-            background: #2d2e36;
-            border: 1px solid #3f3f46;
-            color: white;
-        }
+        body { background-color: #191a1f; color: #e0e0e0; }
+        .accent-red { color: #ff4d4d; }
+        .bg-accent-red { background-color: #ff4d4d; }
+        .card { background: #25262c; border-left: 4px solid #ff4d4d; }
+        input, select, textarea { background: #2d2e36; border: 1px solid #3f3f46; color: white; padding: 8px; border-radius: 4px; }
+        .loading-overlay { background: rgba(0,0,0,0.7); position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 100; }
     </style>
-    <script>
-        //const API_URL = "https://script.google.com/macros/s/AKfycbz8uozReM1oW3FFf_qNyW1uMOE5W9RSV7JGmZMB5z9W8eh5u1lVXFfwJvUGqHM7DufPOw/exec";
-
-        // ... 前方的 createApp 與 data 部分保持不變 ...
-
-        methods: {
-            // 儲存密碼並登入
-            saveAuth() {
-                if (!this.inputPassword) return alert("請輸入密碼");
-                localStorage.setItem('api_pwd', this.inputPassword);
-                this.isAuthenticated = true;
-                this.fetchTasks();
-            },
-
-    // 從 Google Sheet 抓取資料
-    async fetchTasks() {
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            action: 'read',
-                            password: localStorage.getItem('api_pwd')
-                        })
-                    });
-                    const data = await response.json();
-                    if (data.status === "error") {
-                        alert("驗證失效，請重新輸入密碼");
-                        this.clearAuth();
-                    } else {
-                        // 依據社群排序
-                        this.tasks = data.sort((a, b) => a.community.localeCompare(b.community));
-                    }
-                } catch (e) {
-                    console.error("讀取失敗", e);
-                }
-            },
-
-    // 新增任務
-    async addTask(formData) {
-                const payload = {
-                    action: 'add',
-                    password: localStorage.getItem('api_pwd'),
-                    ...formData // 包含 community, role, title, total, note
-                };
-                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                this.showAddModal = false;
-                this.fetchTasks(); // 重新整理
-            },
-
-    // 更新進度 (+1)
-    async updateProgress(task) {
-                if (task.current >= task.total) return;
-
-                task.current += 1;
-                const payload = {
-                    action: 'update',
-                    password: localStorage.getItem('api_pwd'),
-                    id: task.id,
-                    current: task.current,
-                    note: task.note
-                };
-                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-            },
-
-    // 刪除任務
-    async deleteTask(id) {
-                if (!confirm("確定要刪除此任務嗎？")) return;
-                const payload = {
-                    action: 'delete',
-                    password: localStorage.getItem('api_pwd'),
-                    id: id
-                };
-                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                this.fetchTasks();
-            }
-        }
-    </script>
 </head>
-
 <body class="p-4 md:p-8">
     <div id="app" class="max-w-4xl mx-auto">
+        <div v-if="loading" class="loading-overlay">資料傳輸中...</div>
+
         <header class="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
             <h1 class="text-2xl font-bold accent-red">任務打卡系統</h1>
-            <button @click="clearAuth" class="text-xs text-gray-500 underline">登出/更換密碼</button>
+            <button v-if="isAuthenticated" @click="clearAuth" class="text-xs text-gray-500 underline">登出/更換密碼</button>
         </header>
 
         <div v-if="!isAuthenticated" class="text-center mt-20">
             <h2 class="mb-4">請輸入存取密碼</h2>
-            <input type="password" v-model="inputPassword" class="p-2 rounded" @keyup.enter="saveAuth">
-            <button @click="saveAuth" class="bg-accent-red px-4 py-2 rounded ml-2">進入</button>
+            <input type="password" v-model="inputPassword" class="p-2 rounded text-center" @keyup.enter="saveAuth">
+            <button @click="saveAuth" class="bg-accent-red px-4 py-2 rounded ml-2 font-bold">進入</button>
         </div>
 
         <div v-else>
-            <div class="mb-6 flex gap-2">
+            <div class="mb-6">
                 <button @click="showAddModal = true" class="bg-accent-red px-4 py-2 rounded font-bold">+ 新增任務</button>
             </div>
 
-            <div v-for="(tasks, community) in groupedTasks" :key="community" class="mb-8">
+            <div v-for="(taskList, community) in groupedTasks" :key="community" class="mb-8">
                 <h2 class="text-xl font-bold mb-4 bg-gray-800 p-2 rounded">{{ community }}</h2>
-
-                <div v-for="task in tasks" :key="task.id" class="card p-4 mb-3 rounded shadow-lg">
+                <div v-for="task in taskList" :key="task.id" class="card p-4 mb-3 rounded shadow-lg">
                     <div class="flex justify-between items-start">
                         <div>
                             <span class="text-xs text-gray-400 uppercase tracking-widest">{{ task.role }}</span>
@@ -141,42 +45,63 @@
                         </div>
                         <div class="text-right">
                             <span v-if="task.current >= task.total" class="accent-red font-bold text-sm">★ 任務完成</span>
-                            <div class="text-sm">{{ task.current }} / {{ task.total }}</div>
+                            <div class="text-sm font-mono">{{ task.current }} / {{ task.total }}</div>
                         </div>
                     </div>
-
+                    
                     <div class="w-full bg-gray-700 h-2 rounded-full mt-3 overflow-hidden">
-                        <div class="bg-accent-red h-full transition-all"
-                            :style="{width: (task.current/task.total*100) + '%'}"></div>
+                        <div class="bg-accent-red h-full transition-all duration-500" 
+                             :style="{width: (Math.min(task.current/task.total, 1)*100) + '%'}"></div>
                     </div>
 
                     <p class="text-xs text-gray-500 mt-2 italic">備註: {{ task.note || '無' }}</p>
-
-                    <div class="mt-4 flex gap-2">
-                        <button @click="updateProgress(task, 1)" class="bg-gray-700 px-3 py-1 rounded text-sm">+1
-                            進度</button>
-                        <button @click="deleteTask(task.id)" class="text-gray-500 text-sm">刪除</button>
+                    
+                    <div class="mt-4 flex gap-4">
+                        <button @click="handleUpdateProgress(task)" 
+                                :disabled="task.current >= task.total"
+                                class="bg-gray-700 hover:bg-gray-600 px-4 py-1 rounded text-sm disabled:opacity-50">打卡 +1</button>
+                        <button @click="handleDelete(task.id)" class="text-gray-500 text-sm hover:text-red-400">刪除</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showAddModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div class="bg-[#25262c] p-6 rounded-xl w-full max-w-md border border-gray-700">
+                <h2 class="text-xl font-bold mb-4 accent-red">新增任務</h2>
+                <div class="flex flex-col gap-3">
+                    <input v-model="newTask.community" placeholder="社群平台 (如: Discord)">
+                    <input v-model="newTask.role" placeholder="角色 (如: 本尊)">
+                    <input v-model="newTask.title" placeholder="任務標題">
+                    <input type="number" v-model.number="newTask.total" placeholder="需要次數">
+                    <textarea v-model="newTask.note" placeholder="備註 (選填)"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                    <button @click="showAddModal = false" class="text-gray-400">取消</button>
+                    <button @click="handleAdd" class="bg-accent-red px-6 py-2 rounded font-bold">儲存任務</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
+        // 🚨 請務必換成你部署後的 Web App URL
+        const API_URL = "https://script.google.com/macros/s/AKfycbz8uozReM1oW3FFf_qNyW1uMOE5W9RSV7JGmZMB5z9W8eh5u1lVXFfwJvUGqHM7DufPOw/exec";
+
         const { createApp } = Vue;
         createApp({
             data() {
                 return {
                     isAuthenticated: false,
                     inputPassword: '',
-                    tasks: [], // 模擬資料，實際對接 Apps Script
-                    showAddModal: false
+                    loading: false,
+                    showAddModal: false,
+                    tasks: [],
+                    newTask: { community: '', role: '', title: '', total: 1, note: '' }
                 }
             },
             computed: {
                 groupedTasks() {
-                    // 依據社群平台進行排序與分組
                     return this.tasks.reduce((acc, task) => {
                         if (!acc[task.community]) acc[task.community] = [];
                         acc[task.community].push(task);
@@ -192,6 +117,24 @@
                 }
             },
             methods: {
+                async apiCall(payload) {
+                    this.loading = true;
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                password: localStorage.getItem('api_pwd'),
+                                ...payload
+                            })
+                        });
+                        return await response.json();
+                    } catch (e) {
+                        console.error("API Error:", e);
+                        // 如果發生 CORS 錯誤但資料有進去，可以在這裡做簡單處理
+                    } finally {
+                        this.loading = false;
+                    }
+                },
                 saveAuth() {
                     localStorage.setItem('api_pwd', this.inputPassword);
                     this.isAuthenticated = true;
@@ -201,21 +144,34 @@
                     localStorage.removeItem('api_pwd');
                     location.reload();
                 },
-                fetchTasks() {
-                    // 這裡執行 fetch(API_URL, { method: 'POST', body: ... })
-                    // 暫以 Demo 資料呈現
-                    this.tasks = [
-                        { id: 1, community: 'Discord', role: '管理員', title: '每日巡邏', total: 5, current: 2, note: '' },
-                        { id: 2, community: 'Discord', role: '玩家', title: '簽到', total: 1, current: 1, note: '已領取獎勵' },
-                        { id: 3, community: 'Facebook', role: '小編', title: '發布貼文', total: 3, current: 0, note: '素材製作中' }
-                    ];
+                async fetchTasks() {
+                    const data = await this.apiCall({ action: 'read' });
+                    if (data) {
+                        this.tasks = data.sort((a, b) => a.community.localeCompare(b.community));
+                    }
                 },
-                updateProgress(task, val) {
-                    if (task.current < task.total) task.current += val;
+                async handleAdd() {
+                    await this.apiCall({ action: 'add', ...this.newTask });
+                    this.showAddModal = false;
+                    this.newTask = { community: '', role: '', title: '', total: 1, note: '' };
+                    await this.fetchTasks();
+                },
+                async handleUpdateProgress(task) {
+                    task.current += 1;
+                    await this.apiCall({ 
+                        action: 'update', 
+                        id: task.id, 
+                        current: task.current, 
+                        note: task.note 
+                    });
+                },
+                async handleDelete(id) {
+                    if (!confirm("確定刪除？")) return;
+                    await this.apiCall({ action: 'delete', id: id });
+                    await this.fetchTasks();
                 }
             }
         }).mount('#app');
     </script>
 </body>
-
 </html>
