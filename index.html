@@ -3,172 +3,284 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Tracker Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Task Tracker Pro - 角色排序版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #191a1f; color: #e0e0e0; }
+        body { background-color: #191a1f; color: #e0e0e0; font-family: sans-serif; }
         .accent-red { color: #ff4d4d; }
         .bg-accent-red { background-color: #ff4d4d; }
         .card { background: #25262c; border-left: 4px solid #ff4d4d; }
-        input, select, textarea { background: #2d2e36; border: 1px solid #3f3f46; color: white; padding: 8px; border-radius: 4px; }
-        .loading-overlay { background: rgba(0,0,0,0.7); position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .card.is-finished { border-left-color: #4b5563; }
+        [v-cloak] { display: none; }
+        input, select, textarea { background: #2d2e36 !important; border: 1px solid #3f3f46 !important; color: white !important; }
+        .group-header, .role-header { cursor: pointer; user-select: none; }
+        .arrow-icon { transition: transform 0.3s; }
+        .global-note-box { border: 2px dashed #3f3f46; background: #1c1d22; border-radius: 1rem; }
     </style>
 </head>
-<body class="p-4 md:p-8">
-    <div id="app" class="max-w-4xl mx-auto">
-        <div v-if="loading" class="loading-overlay">資料傳輸中...</div>
-
+<body class="p-4 md:p-8 pb-20">
+    <div id="app" class="max-w-4xl mx-auto" v-cloak>
         <header class="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
-            <h1 class="text-2xl font-bold accent-red">任務打卡系統</h1>
-            <button v-if="isAuthenticated" @click="clearAuth" class="text-xs text-gray-500 underline">登出/更換密碼</button>
+            <h1 class="text-2xl font-bold accent-red italic">TASK PRO</h1>
+            <div v-if="isAuthenticated" class="flex gap-2">
+                <button @click="copyDailyReport" class="bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded-lg font-bold text-xs text-white transition shadow-lg">📋 複製日報</button>
+                <button @click="resetAllTasks" class="text-[10px] border border-gray-700 px-3 py-2 rounded-lg hover:bg-red-950">重整今日</button>
+                <button @click="openAddModal" class="bg-accent-red px-4 py-2 rounded-lg font-bold text-sm text-white shadow-lg">＋ 新增</button>
+            </div>
         </header>
 
+        <div v-if="isAuthenticated">
+            <div v-for="(roles, community) in hierarchicalTasks" :key="community" class="mb-8">
+                <div @click="toggleGroup('comm_' + community)" class="group-header flex justify-between items-center p-3 bg-[#111217] border-b border-red-900 mb-2 rounded-lg shadow-lg">
+                    <h2 class="text-xs font-black text-red-500 uppercase tracking-widest">{{ community }}</h2>
+                    <span class="arrow-icon text-xs" :class="{'rotate-180': !collapsedGroups['comm_' + community]}">▼</span>
+                </div>
+
+                <div v-show="!collapsedGroups['comm_' + community]">
+                    <div v-for="(taskList, roleName, rIdx) in roles" :key="roleName" class="ml-2 mb-4">
+                        <div class="role-header flex flex-col p-3 rounded-lg border-l-4 border-gray-500 mb-1 bg-[#2d2e36] shadow-md">
+                            <div class="flex justify-between items-center" @click="toggleGroup('role_' + community + roleName)">
+                                <span class="text-sm font-bold tracking-wide">👤 {{ roleName }}</span>
+                                <div class="flex items-center gap-2">
+                                    <div class="flex border border-gray-600 rounded-lg overflow-hidden mr-2">
+                                        <button @click.stop="moveRole(community, roleName, -1)" class="bg-gray-800 px-2 py-0.5 text-[10px] hover:bg-gray-700 border-r border-gray-600">▲</button>
+                                        <button @click.stop="moveRole(community, roleName, 1)" class="bg-gray-800 px-2 py-0.5 text-[10px] hover:bg-gray-700">▼</button>
+                                    </div>
+                                    <button @click.stop="editRoleNote(community, roleName, taskList[0].roleNote)" class="text-[10px] text-red-400 border border-red-900 px-2 py-0.5 rounded hover:bg-red-900 transition">狀態</button>
+                                    <span class="arrow-icon text-[10px]" :class="{'rotate-180': !collapsedGroups['role_' + community + roleName]}">▼</span>
+                                </div>
+                            </div>
+                            <div v-if="taskList[0].roleNote" class="mt-2 text-[11px] text-yellow-500/80 bg-black/20 p-2 rounded italic border border-yellow-900/30">⚠ {{ taskList[0].roleNote }}</div>
+                        </div>
+
+                        <div v-show="!collapsedGroups['role_' + community + roleName]" class="space-y-3 p-2 bg-[#202127]/50 rounded-b-lg">
+                            <div v-for="(task, tIdx) in taskList" :key="task.id" class="card p-4 rounded-r-lg shadow-md" :class="{'is-finished': task.current >= task.total}">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h3 class="text-md font-bold" :class="{'text-gray-600 line-through': task.current >= task.total}">{{ task.title }}</h3>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" v-model.number="task.total" @change="updateTaskTotal(task)" class="w-12 text-xs p-1 rounded text-center bg-black/20">
+                                        <div class="flex items-baseline"><span class="text-2xl font-black accent-red" :class="{'text-gray-600': task.current >= task.total}">{{ task.current }}</span><span class="text-gray-600 text-sm"> / {{ task.total }}</span></div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <div class="flex gap-2">
+                                        <button @click="reduceProgress(task)" :disabled="task.current <= 0" class="bg-gray-700 disabled:opacity-20 px-3 py-1.5 rounded text-sm font-bold shadow-inner">－</button>
+                                        <button @click="updateProgress(task)" :disabled="task.current >= task.total" 
+                                                class="px-5 py-1.5 rounded text-sm font-black active:scale-95 transition"
+                                                :class="task.current >= task.total ? 'bg-gray-600 text-gray-400' : 'bg-accent-red text-white'">
+                                            {{ task.current >= task.total ? 'DONE' : '＋ 打卡' }}
+                                        </button>
+                                        <div class="flex border border-gray-700 rounded-lg overflow-hidden">
+                                            <button @click="moveTaskInGroup(taskList, tIdx, -1)" class="bg-gray-800 px-2 py-1 text-[10px]">▲</button>
+                                            <button @click="moveTaskInGroup(taskList, tIdx, 1)" class="bg-gray-800 px-2 py-1 text-[10px]">▼</button>
+                                        </div>
+                                        <button @click="editTaskNote(task)" class="bg-gray-800 px-3 py-1 rounded text-[10px] text-gray-400 transition">📝</button>
+                                    </div>
+                                    <button @click="deleteTask(task.id)" class="text-[10px] text-gray-700 hover:text-red-500">Delete</button>
+                                </div>
+                                <p v-if="task.note" class="text-[11px] text-gray-500 mt-2 italic border-t border-gray-800 pt-1">備註: {{ task.note }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-20 global-note-box overflow-hidden">
+                <div @click="toggleGroup('global_note')" class="p-4 flex justify-between items-center cursor-pointer hover:bg-white/5 transition">
+                    <h2 class="text-sm font-black text-gray-400 tracking-[0.3em] uppercase italic">Global Notebook</h2>
+                    <span class="arrow-icon text-xs text-gray-600" :class="{'rotate-180': !collapsedGroups['global_note']}">▼</span>
+                </div>
+                <div v-show="!collapsedGroups['global_note']" class="p-4 border-t border-gray-800">
+                    <textarea v-model="globalNote" class="w-full h-64 p-5 rounded-xl border border-gray-800 leading-relaxed text-sm focus:border-red-500 outline-none mb-4" placeholder="在此輸入筆記..."></textarea>
+                    <button @click="saveGlobalNote" class="w-full bg-accent-red py-3 rounded-lg font-bold text-white shadow-lg transition">儲存筆記內容</button>
+                </div>
+            </div>
+        </div>
+
         <div v-if="!isAuthenticated" class="text-center mt-20">
-            <h2 class="mb-4">請輸入存取密碼</h2>
-            <input type="password" v-model="inputPassword" class="p-2 rounded text-center" @keyup.enter="saveAuth">
-            <button @click="saveAuth" class="bg-accent-red px-4 py-2 rounded ml-2 font-bold">進入</button>
+            <div class="bg-[#25262c] p-8 rounded-xl border border-gray-800 inline-block w-full max-w-sm">
+                <input type="password" v-model="inputPassword" class="p-3 rounded-lg w-full text-center mb-4" placeholder="Password" @keyup.enter="saveAuth">
+                <button @click="saveAuth" class="bg-accent-red w-full py-3 rounded-lg font-bold text-white">進入</button>
+            </div>
         </div>
 
-        <div v-else>
-            <div class="mb-6">
-                <button @click="showAddModal = true" class="bg-accent-red px-4 py-2 rounded font-bold">+ 新增任務</button>
-            </div>
-
-            <div v-for="(taskList, community) in groupedTasks" :key="community" class="mb-8">
-                <h2 class="text-xl font-bold mb-4 bg-gray-800 p-2 rounded">{{ community }}</h2>
-                <div v-for="task in taskList" :key="task.id" class="card p-4 mb-3 rounded shadow-lg">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <span class="text-xs text-gray-400 uppercase tracking-widest">{{ task.role }}</span>
-                            <h3 class="text-lg font-semibold">{{ task.title }}</h3>
-                        </div>
-                        <div class="text-right">
-                            <span v-if="task.current >= task.total" class="accent-red font-bold text-sm">★ 任務完成</span>
-                            <div class="text-sm font-mono">{{ task.current }} / {{ task.total }}</div>
-                        </div>
-                    </div>
-                    
-                    <div class="w-full bg-gray-700 h-2 rounded-full mt-3 overflow-hidden">
-                        <div class="bg-accent-red h-full transition-all duration-500" 
-                             :style="{width: (Math.min(task.current/task.total, 1)*100) + '%'}"></div>
-                    </div>
-
-                    <p class="text-xs text-gray-500 mt-2 italic">備註: {{ task.note || '無' }}</p>
-                    
-                    <div class="mt-4 flex gap-4">
-                        <button @click="handleUpdateProgress(task)" 
-                                :disabled="task.current >= task.total"
-                                class="bg-gray-700 hover:bg-gray-600 px-4 py-1 rounded text-sm disabled:opacity-50">打卡 +1</button>
-                        <button @click="handleDelete(task.id)" class="text-gray-500 text-sm hover:text-red-400">刪除</button>
-                    </div>
+        <div v-if="showNoteModal" class="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+            <div class="bg-[#25262c] p-6 rounded-xl w-full max-sm border border-gray-700">
+                <h2 class="text-lg font-bold mb-4 accent-red italic">{{ noteModalTitle }}</h2>
+                <textarea v-model="tempNote" class="w-full h-32 p-3 rounded-lg mb-6 outline-none focus:border-red-500"></textarea>
+                <div class="flex justify-end gap-4">
+                    <button @click="showNoteModal = false" class="text-gray-500 font-bold uppercase text-xs">Cancel</button>
+                    <button @click="saveNote" class="bg-accent-red px-6 py-2 rounded font-bold text-white">儲存內容</button>
                 </div>
             </div>
         </div>
 
-        <div v-if="showAddModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-            <div class="bg-[#25262c] p-6 rounded-xl w-full max-w-md border border-gray-700">
-                <h2 class="text-xl font-bold mb-4 accent-red">新增任務</h2>
-                <div class="flex flex-col gap-3">
-                    <input v-model="newTask.community" placeholder="社群平台 (如: Discord)">
-                    <input v-model="newTask.role" placeholder="角色 (如: 本尊)">
-                    <input v-model="newTask.title" placeholder="任務標題">
-                    <input type="number" v-model.number="newTask.total" placeholder="需要次數">
-                    <textarea v-model="newTask.note" placeholder="備註 (選填)"></textarea>
+        <div v-if="showAddModal" class="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 backdrop-blur-lg">
+            <div class="bg-[#25262c] p-8 rounded-2xl w-full max-w-md border border-gray-700">
+                <h2 class="text-xl font-black mb-6 accent-red border-b border-gray-800 pb-2">NEW TASK</h2>
+                <div class="space-y-4 text-sm">
+                    <select v-model="selectedCommunity" class="w-full p-3 rounded-lg"><option v-for="c in existingCommunities" :value="c">{{ c }}</option><option value="NEW_ACTION">＋ 新增社群...</option></select>
+                    <input v-if="selectedCommunity === 'NEW_ACTION'" v-model="customCommunity" class="w-full p-3 rounded-lg border-red-500 border-dashed border-2 bg-transparent" placeholder="新社群名稱">
+                    <select v-model="selectedRole" class="w-full p-3 rounded-lg"><option v-for="r in existingRolesForCommunity" :value="r">{{ r }}</option><option value="NEW_ACTION">＋ 新增角色...</option></select>
+                    <input v-if="selectedRole === 'NEW_ACTION'" v-model="customRole" class="w-full p-3 rounded-lg border-red-500 border-dashed border-2 bg-transparent" placeholder="新角色名稱">
+                    <input v-model="newTask.title" class="w-full p-3 rounded-lg" placeholder="任務名稱">
+                    <input type="number" v-model.number="newTask.total" class="w-full p-3 rounded-lg" placeholder="目標次數">
                 </div>
-                <div class="flex justify-end gap-3 mt-6">
-                    <button @click="showAddModal = false" class="text-gray-400">取消</button>
-                    <button @click="handleAdd" class="bg-accent-red px-6 py-2 rounded font-bold">儲存任務</button>
+                <div class="flex justify-end gap-6 mt-10">
+                    <button @click="showAddModal = false" class="text-gray-500 font-bold text-xs">Cancel</button>
+                    <button @click="addTask" class="bg-accent-red px-10 py-3 rounded-lg font-black text-white">CONFIRM</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // 🚨 請務必換成你部署後的 Web App URL
-        const API_URL = "https://script.google.com/macros/s/AKfycbz8uozReM1oW3FFf_qNyW1uMOE5W9RSV7JGmZMB5z9W8eh5u1lVXFfwJvUGqHM7DufPOw/exec";
+        const API_URL = "https://script.google.com/macros/s/AKfycbwKUXGrWO_vs_yWcn4fyHPplMqEUOlrCXmcYE0gAmODA6Mz_BsydCSwI7KPBmQfBmqf5g/exec";
 
         const { createApp } = Vue;
         createApp({
             data() {
                 return {
-                    isAuthenticated: false,
-                    inputPassword: '',
-                    loading: false,
-                    showAddModal: false,
-                    tasks: [],
-                    newTask: { community: '', role: '', title: '', total: 1, note: '' }
+                    isAuthenticated: false, inputPassword: '', loading: false, showAddModal: false,
+                    showNoteModal: false, noteModalTitle: '', tempNote: '', activeTarget: null,
+                    tasks: [], collapsedGroups: {'global_note': true}, globalNote: '',
+                    selectedCommunity: '', customCommunity: '', selectedRole: '', customRole: '',
+                    newTask: { title: '', total: 1, note: '' }
                 }
             },
             computed: {
-                groupedTasks() {
-                    return this.tasks.reduce((acc, task) => {
-                        if (!acc[task.community]) acc[task.community] = [];
-                        acc[task.community].push(task);
+                hierarchicalTasks() {
+                    return this.tasks.reduce((acc, t) => {
+                        if (!acc[t.community]) acc[t.community] = {};
+                        if (!acc[t.community][t.role]) acc[t.community][t.role] = [];
+                        acc[t.community][t.role].push(t);
                         return acc;
                     }, {});
+                },
+                existingCommunities() { return [...new Set(this.tasks.map(t => t.community))]; },
+                existingRolesForCommunity() {
+                    if (!this.selectedCommunity || this.selectedCommunity === 'NEW_ACTION') return [];
+                    return [...new Set(this.tasks.filter(t => t.community === this.selectedCommunity).map(t => t.role))];
                 }
             },
-            mounted() {
-                const pwd = localStorage.getItem('api_pwd');
-                if (pwd) {
-                    this.isAuthenticated = true;
-                    this.fetchTasks();
-                }
-            },
+            mounted() { const pwd = localStorage.getItem('api_pwd'); if (pwd) { this.isAuthenticated = true; this.fetchTasks(); } },
             methods: {
-                async apiCall(payload) {
+                toggleGroup(id) { this.collapsedGroups[id] = !this.collapsedGroups[id]; },
+                saveAuth() { localStorage.setItem('api_pwd', this.inputPassword); this.isAuthenticated = true; this.fetchTasks(); },
+                clearAuth() { localStorage.removeItem('api_pwd'); location.reload(); },
+                async apiReq(payload) {
                     this.loading = true;
                     try {
-                        const response = await fetch(API_URL, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                password: localStorage.getItem('api_pwd'),
-                                ...payload
-                            })
-                        });
-                        return await response.json();
-                    } catch (e) {
-                        console.error("API Error:", e);
-                        // 如果發生 CORS 錯誤但資料有進去，可以在這裡做簡單處理
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-                saveAuth() {
-                    localStorage.setItem('api_pwd', this.inputPassword);
-                    this.isAuthenticated = true;
-                    this.fetchTasks();
-                },
-                clearAuth() {
-                    localStorage.removeItem('api_pwd');
-                    location.reload();
+                        const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ password: localStorage.getItem('api_pwd'), ...payload }) });
+                        return await res.json();
+                    } finally { this.loading = false; }
                 },
                 async fetchTasks() {
-                    const data = await this.apiCall({ action: 'read' });
+                    const data = await this.apiReq({ action: 'read' });
                     if (data) {
-                        this.tasks = data.sort((a, b) => a.community.localeCompare(b.community));
+                        this.tasks = data.tasks; this.globalNote = data.globalNote;
+                        this.tasks.forEach(task => {
+                            const cId = 'comm_' + task.community; const rId = 'role_' + task.community + task.role;
+                            if (this.collapsedGroups[cId] === undefined) this.collapsedGroups[cId] = true;
+                            if (this.collapsedGroups[rId] === undefined) this.collapsedGroups[rId] = true;
+                        });
                     }
                 },
-                async handleAdd() {
-                    await this.apiCall({ action: 'add', ...this.newTask });
-                    this.showAddModal = false;
-                    this.newTask = { community: '', role: '', title: '', total: 1, note: '' };
-                    await this.fetchTasks();
-                },
-                async handleUpdateProgress(task) {
-                    task.current += 1;
-                    await this.apiCall({ 
-                        action: 'update', 
-                        id: task.id, 
-                        current: task.current, 
-                        note: task.note 
+                // 💡 角色手動排序核心邏輯
+                async moveRole(community, roleName, direction) {
+                    // 1. 取得該社群下的所有角色清單
+                    const rolesInComm = Object.keys(this.hierarchicalTasks[community]);
+                    const index = rolesInComm.indexOf(roleName);
+                    const newIndex = index + direction;
+                    
+                    if (newIndex < 0 || newIndex >= rolesInComm.length) return;
+
+                    // 2. 準備新的全域 tasks 順序
+                    // 我們需要找出所有任務，但在移動角色的過程中，維持社群內的相對順序
+                    const newFlatTasks = [];
+                    const communityOrder = Object.keys(this.hierarchicalTasks);
+
+                    communityOrder.forEach(comm => {
+                        let currentRoles = Object.keys(this.hierarchicalTasks[comm]);
+                        if (comm === community) {
+                            // 交換角色位置
+                            const temp = currentRoles[index];
+                            currentRoles.splice(index, 1);
+                            currentRoles.splice(newIndex, 0, temp);
+                        }
+                        // 依照新角色順序把任務填回去
+                        currentRoles.forEach(r => {
+                            newFlatTasks.push(...this.hierarchicalTasks[comm][r]);
+                        });
                     });
+
+                    // 3. 更新本地顯示並同步雲端
+                    this.tasks = newFlatTasks;
+                    await this.apiReq({ action: 'swap', idList: this.tasks.map(t => t.id) });
                 },
-                async handleDelete(id) {
-                    if (!confirm("確定刪除？")) return;
-                    await this.apiCall({ action: 'delete', id: id });
-                    await this.fetchTasks();
+                async moveTaskInGroup(list, index, direction) {
+                    const newIndex = index + direction;
+                    if (newIndex < 0 || newIndex >= list.length) return;
+                    const temp = list[index]; list.splice(index, 1); list.splice(newIndex, 0, temp);
+                    const flatTasks = [];
+                    Object.values(this.hierarchicalTasks).forEach(rs => { Object.values(rs).forEach(ts => { flatTasks.push(...ts); }); });
+                    await this.apiReq({ action: 'swap', idList: flatTasks.map(t => t.id) });
+                },
+                copyDailyReport() {
+                    const dateStr = new Date().toLocaleDateString();
+                    let reportText = `Amelie (${dateStr})工作事項\n\n`;
+                    Object.keys(this.hierarchicalTasks).forEach(comm => {
+                        const roles = this.hierarchicalTasks[comm];
+                        Object.keys(roles).forEach(roleName => {
+                            const tasks = roles[roleName];
+                            let segments = [];
+                            if (comm.includes("臉書")) {
+                                const addGroup = tasks.find(t => t.title.includes("加社團"));
+                                const dm = tasks.find(t => t.title.includes("私訊"));
+                                if (addGroup) segments.push(`${addGroup.current}${addGroup.note ? ' (' + addGroup.note + ')' : ''}`);
+                                if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
+                            } else if (comm.includes("X") || comm.includes("脆")) {
+                                const friend = tasks.find(t => t.title.includes("好友"));
+                                if (friend) segments.push(`${friend.current}${friend.note ? ' (' + friend.note + ')' : ''}`);
+                            } else {
+                                const dm = tasks.find(t => t.title.includes("私訊"));
+                                if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
+                            }
+                            if (segments.length > 0) reportText += `${comm} (${roleName})：${segments.join(' / ')}\n`;
+                        });
+                    });
+                    const el = document.createElement('textarea'); el.value = reportText;
+                    document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+                    alert("日報已複製！");
+                },
+                async saveGlobalNote() { await this.apiReq({ action: 'save_global_note', noteText: this.globalNote }); alert("儲存成功！"); },
+                openAddModal() { this.showAddModal = true; if (this.existingCommunities.length > 0) this.selectedCommunity = this.existingCommunities[0]; else this.selectedCommunity = 'NEW_ACTION'; },
+                async addTask() {
+                    const finalComm = this.selectedCommunity === 'NEW_ACTION' ? this.customCommunity : this.selectedCommunity;
+                    const finalRole = this.selectedRole === 'NEW_ACTION' ? this.customRole : this.selectedRole;
+                    await this.apiReq({ action: 'add', community: finalComm, role: finalRole, ...this.newTask });
+                    this.showAddModal = false; await this.fetchTasks();
+                },
+                async updateProgress(task) { task.current++; await this.apiReq({ action: 'update', id: task.id, current: task.current }); },
+                async reduceProgress(task) { if (task.current > 0) { task.current--; await this.apiReq({ action: 'update', id: task.id, current: task.current }); } },
+                async updateTaskTotal(task) { await this.apiReq({ action: 'update_total', id: task.id, total: task.total }); },
+                async deleteTask(id) { if (confirm("刪除？")) { await this.apiReq({ action: 'delete', id: id }); await this.fetchTasks(); } },
+                async resetAllTasks() { if (confirm("重整？")) { await this.apiReq({ action: 'resetAll' }); await this.fetchTasks(); } },
+                editRoleNote(comm, role, note) { this.noteModalTitle = `角色狀態: ${role}`; this.tempNote = note; this.activeTarget = { type: 'role', community: comm, role: role }; this.showNoteModal = true; },
+                editTaskNote(task) { this.noteModalTitle = `任務備註: ${task.title}`; this.tempNote = task.note; this.activeTarget = { type: 'task', id: task.id }; this.showNoteModal = true; },
+                async saveNote() {
+                    if (this.activeTarget.type === 'role') await this.apiReq({ action: 'update_role_note', community: this.activeTarget.community, role: this.activeTarget.role, roleNote: this.tempNote });
+                    else await this.apiReq({ action: 'update', id: this.activeTarget.id, note: this.tempNote });
+                    this.showNoteModal = false; await this.fetchTasks();
+                }
+            },
+            watch: {
+                selectedCommunity(newVal) {
+                    if (newVal !== 'NEW_ACTION') {
+                        const roles = this.existingRolesForCommunity;
+                        this.selectedRole = roles.length > 0 ? roles[0] : 'NEW_ACTION';
+                    } else this.selectedRole = 'NEW_ACTION';
                 }
             }
         }).mount('#app');
