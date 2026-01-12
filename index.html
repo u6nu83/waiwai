@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Pro - 終極進化版</title>
+    <title>Task Tracker Pro - 獨立運算版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -22,9 +22,9 @@
 <body class="p-4 md:p-8 pb-20">
     <div id="app" class="max-w-4xl mx-auto" v-cloak>
         <header class="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
-            <h1 class="text-2xl font-bold accent-red italic tracking-tighter">TASK PRO <span class="text-[10px] bg-red-900 px-2 py-1 rounded ml-2 not-italic text-white">SYNC ONLY</span></h1>
+            <h1 class="text-2xl font-bold accent-red italic">TASK PRO</h1>
             <div v-if="isAuthenticated" class="flex gap-2">
-                <button @click="copyDailyReport" class="bg-blue-600 px-3 py-2 rounded-lg font-bold text-xs text-white">📋 複製日報</button>
+                <button @click="copyDailyReport" class="bg-blue-600 px-3 py-2 rounded-lg font-bold text-xs text-white transition">📋 複製日報</button>
                 <button @click="resetAllTasks" class="text-[10px] border border-gray-700 px-3 py-2 rounded-lg">重整今日</button>
                 <button @click="openAddModal" class="bg-accent-red px-4 py-2 rounded-lg font-bold text-sm text-white">＋ 新增</button>
             </div>
@@ -32,12 +32,12 @@
 
         <div v-if="isAuthenticated">
             <div v-for="(roles, community) in hierarchicalTasks" :key="community" class="mb-8">
-                <div @click="toggleGroup('comm_' + community)" class="group-header flex justify-between items-center p-3 bg-[#111217] border-b border-red-900 mb-2 rounded-lg">
+                <div @click="toggleGroup('comm_' + community)" class="group-header flex justify-between items-center p-3 bg-[#111217] border-b border-red-900 mb-2 rounded-lg shadow-lg">
                     <div class="flex items-center gap-4">
                         <h2 class="text-xs font-black text-red-500 uppercase tracking-widest">{{ community }}</h2>
                         <div class="flex border border-red-900/30 rounded overflow-hidden">
-                            <button @click.stop="moveCommunity(community, -1)" class="bg-black/40 px-2 py-0.5 text-[10px] hover:bg-red-900 transition">▲</button>
-                            <button @click.stop="moveCommunity(community, 1)" class="bg-black/40 px-2 py-0.5 text-[10px] hover:bg-red-900 transition">▼</button>
+                            <button @click.stop="moveCommunity(community, -1)" class="bg-black/40 px-2 py-0.5 text-[10px]">▲</button>
+                            <button @click.stop="moveCommunity(community, 1)" class="bg-black/40 px-2 py-0.5 text-[10px]">▼</button>
                         </div>
                     </div>
                     <span class="arrow-icon text-xs" :class="{'rotate-180': !collapsedGroups['comm_' + community]}">▼</span>
@@ -45,7 +45,7 @@
 
                 <div v-show="!collapsedGroups['comm_' + community]">
                     <div v-for="(taskList, roleName) in roles" :key="roleName" class="ml-2 mb-4">
-                        <div class="role-header flex flex-col p-3 rounded-lg border-l-4 border-gray-500 mb-1 bg-[#2d2e36] shadow-md">
+                        <div class="role-header flex flex-col p-3 rounded-lg border-l-4 border-gray-500 mb-1 bg-[#2d2e36]">
                             <div class="flex justify-between items-center" @click="toggleGroup('role_' + community + roleName)">
                                 <span class="text-sm font-bold">👤 {{ roleName }}</span>
                                 <div class="flex items-center gap-2">
@@ -66,24 +66,25 @@
                                 <div class="flex justify-between items-center mb-3">
                                     <h3 class="text-md font-bold" :class="{'text-gray-600 line-through': task.current >= task.total}">{{ task.title }}</h3>
                                     <div class="flex items-center gap-2">
-                                        <input type="number" v-model.number="task.total" @change="updateTaskTotal(task)" class="w-12 text-xs p-1 rounded text-center">
-                                        <div class="flex items-baseline"><span class="text-2xl font-black accent-red">{{ task.current }}</span><span class="text-gray-600 text-sm">/{{ task.total }}</span></div>
+                                        <input type="number" v-model.number="task.total" @change="updateTaskTotal(task)" class="w-12 text-xs p-1 rounded text-center bg-black/20">
+                                        <div class="flex items-baseline"><span class="text-2xl font-black accent-red" :class="{'text-gray-600': task.current >= task.total}">{{ task.current }}</span><span class="text-gray-600 text-sm"> / {{ task.total }}</span></div>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <div class="flex gap-2">
-                                        <button @click="handleSyncProgress(task, 'minus')" :disabled="task.current <= 0" class="bg-gray-700 px-3 py-1.5 rounded text-sm font-bold shadow-inner">－</button>
-                                        <button @click="handleSyncProgress(task, 'plus')" :disabled="task.current >= task.total" 
-                                                class="px-5 py-1.5 rounded text-sm font-black transition bg-accent-red text-white active:scale-95 disabled:bg-gray-600 disabled:text-gray-400">
-                                            {{ task.current >= task.total ? 'DONE' : '＋ 同步打卡' }}
+                                        <button @click="handleProgress(task, 'minus')" :disabled="task.current <= 0" class="bg-gray-700 px-3 py-1.5 rounded text-sm font-bold shadow-inner">－</button>
+                                        <button @click="handleProgress(task, 'plus')" :disabled="task.current >= task.total" 
+                                                class="px-5 py-1.5 rounded text-sm font-black active:scale-95 transition shadow-lg"
+                                                :class="task.current >= task.total ? 'bg-gray-600 text-gray-400' : 'bg-accent-red text-white'">
+                                            {{ task.current >= task.total ? 'FINISHED' : '＋ 打卡' }}
                                         </button>
                                         <div class="flex border border-gray-700 rounded-lg overflow-hidden">
                                             <button @click="moveTaskInGroup(taskList, tIdx, -1)" class="bg-gray-800 px-2 py-1 text-[10px]">▲</button>
                                             <button @click="moveTaskInGroup(taskList, tIdx, 1)" class="bg-gray-800 px-2 py-1 text-[10px]">▼</button>
                                         </div>
-                                        <button @click="editTaskNote(task)" class="bg-gray-800 px-3 py-1 rounded text-[10px] text-gray-400">📝</button>
+                                        <button @click="editTaskNote(task)" class="bg-gray-800 px-3 py-1 rounded text-[10px] text-gray-400 hover:text-white transition">📝</button>
                                     </div>
-                                    <button @click="deleteTask(task.id)" class="text-[10px] text-gray-700 hover:text-red-500">Delete Task</button>
+                                    <button @click="deleteTask(task.id)" class="text-[10px] text-gray-700 hover:text-red-500 uppercase">Delete</button>
                                 </div>
                                 <p v-if="task.note" class="text-[11px] text-gray-500 mt-2 italic border-t border-gray-800 pt-1">備註: {{ task.note }}</p>
                             </div>
@@ -98,8 +99,8 @@
                     <span class="arrow-icon text-xs text-gray-600" :class="{'rotate-180': !collapsedGroups['global_note']}">▼</span>
                 </div>
                 <div v-show="!collapsedGroups['global_note']" class="p-4 border-t border-gray-800">
-                    <textarea v-model="globalNote" class="w-full h-64 p-5 rounded-xl border border-gray-800 leading-relaxed text-sm focus:border-red-500 outline-none mb-4"></textarea>
-                    <button @click="saveGlobalNote" class="w-full bg-accent-red py-3 rounded-lg font-bold text-white shadow-lg">儲存內容</button>
+                    <textarea v-model="globalNote" class="w-full h-64 p-5 rounded-xl border border-gray-800 leading-relaxed text-sm focus:border-red-500 outline-none mb-4" placeholder="在此輸入筆記..."></textarea>
+                    <button @click="saveGlobalNote" class="w-full bg-accent-red py-3 rounded-lg font-bold text-white shadow-lg transition active:scale-95">儲存筆記內容</button>
                 </div>
             </div>
         </div>
@@ -126,21 +127,15 @@
             <div class="bg-[#25262c] p-8 rounded-2xl w-full max-w-md border border-gray-700 shadow-2xl">
                 <h2 class="text-xl font-black mb-6 accent-red border-b border-gray-800 pb-2">NEW TASK</h2>
                 <div class="space-y-4">
-                    <select v-model="selectedCommunity" class="w-full p-3 rounded-lg outline-none focus:border-red-500">
-                        <option v-for="c in existingCommunities" :value="c">{{ c }}</option>
-                        <option value="NEW_ACTION">＋ 新增社群平台...</option>
-                    </select>
+                    <select v-model="selectedCommunity" class="w-full p-3 rounded-lg outline-none focus:border-red-500"><option v-for="c in existingCommunities" :value="c">{{ c }}</option><option value="NEW_ACTION">＋ 新增社群平台...</option></select>
                     <input v-if="selectedCommunity === 'NEW_ACTION'" v-model="customCommunity" class="w-full p-3 rounded-lg border-red-500 border-dashed border-2 bg-transparent" placeholder="新社群名稱">
-                    <select v-model="selectedRole" class="w-full p-3 rounded-lg outline-none focus:border-red-500">
-                        <option v-for="r in existingRolesForCommunity" :value="r">{{ r }}</option>
-                        <option value="NEW_ACTION">＋ 新增角色...</option>
-                    </select>
+                    <select v-model="selectedRole" class="w-full p-3 rounded-lg outline-none focus:border-red-500"><option v-for="r in existingRolesForCommunity" :value="r">{{ r }}</option><option value="NEW_ACTION">＋ 新增角色...</option></select>
                     <input v-if="selectedRole === 'NEW_ACTION'" v-model="customRole" class="w-full p-3 rounded-lg border-red-500 border-dashed border-2 bg-transparent" placeholder="新角色名稱">
                     <input v-model="newTask.title" class="w-full p-3 rounded-lg outline-none focus:border-red-500" placeholder="任務名稱">
                     <input type="number" v-model.number="newTask.total" class="w-full p-3 rounded-lg outline-none focus:border-red-500" placeholder="目標次數">
                 </div>
                 <div class="flex justify-end gap-6 mt-10">
-                    <button @click="showAddModal = false" class="text-gray-500 font-bold text-xs uppercase">Cancel</button>
+                    <button @click="showAddModal = false" class="text-gray-500 font-bold text-xs">Cancel</button>
                     <button @click="addTask" class="bg-accent-red px-10 py-3 rounded-lg font-black text-white shadow-lg">CONFIRM</button>
                 </div>
             </div>
@@ -198,37 +193,28 @@
                         });
                     }
                 },
-                // 💡 全平台同步打卡
-                async handleSyncProgress(task, direction) {
-                    await this.apiReq({ action: 'sync_update', title: task.title, direction: direction });
+                // 💡 修正：完全獨立打卡
+                async handleProgress(task, direction) {
+                    if (direction === 'plus') task.current++;
+                    else task.current--;
+                    await this.apiReq({ action: 'update', id: task.id, current: task.current });
                     await this.fetchTasks();
                 },
-                // 💡 刪除角色核心邏輯
                 async deleteRole(community, role) {
-                    if (confirm(`確定要刪除「${community}」下的角色「${role}」嗎？這會連同該角色所有任務一併刪除！`)) {
+                    if (confirm(`確定刪除「${community}」的角色「${role}」？`)) {
                         await this.apiReq({ action: 'delete_role', community: community, role: role });
                         await this.fetchTasks();
                     }
                 },
-                // 💡 社群平台排序邏輯
                 async moveCommunity(community, direction) {
                     const commOrder = Object.keys(this.hierarchicalTasks);
                     const index = commOrder.indexOf(community);
                     const newIndex = index + direction;
                     if (newIndex < 0 || newIndex >= commOrder.length) return;
-
-                    const temp = commOrder[index];
-                    commOrder.splice(index, 1);
-                    commOrder.splice(newIndex, 0, temp);
-
+                    const temp = commOrder[index]; commOrder.splice(index, 1); commOrder.splice(newIndex, 0, temp);
                     const newFlatTasks = [];
-                    commOrder.forEach(c => {
-                        Object.values(this.hierarchicalTasks[c]).forEach(roleTasks => {
-                            newFlatTasks.push(...roleTasks);
-                        });
-                    });
-                    this.tasks = newFlatTasks;
-                    await this.apiReq({ action: 'swap', idList: this.tasks.map(t => t.id) });
+                    commOrder.forEach(c => { Object.values(this.hierarchicalTasks[c]).forEach(rt => newFlatTasks.push(...rt)); });
+                    this.tasks = newFlatTasks; await this.apiReq({ action: 'swap', idList: this.tasks.map(t => t.id) });
                 },
                 async moveRole(community, roleName, direction) {
                     const rolesInComm = Object.keys(this.hierarchicalTasks[community]);
@@ -239,7 +225,7 @@
                     Object.keys(this.hierarchicalTasks).forEach(comm => {
                         let currentRoles = Object.keys(this.hierarchicalTasks[comm]);
                         if (comm === community) { const temp = currentRoles[index]; currentRoles.splice(index, 1); currentRoles.splice(newIndex, 0, temp); }
-                        currentRoles.forEach(r => { newFlatTasks.push(...this.hierarchicalTasks[comm][r]); });
+                        currentRoles.forEach(r => newFlatTasks.push(...this.hierarchicalTasks[comm][r]));
                     });
                     this.tasks = newFlatTasks; await this.apiReq({ action: 'swap', idList: this.tasks.map(t => t.id) });
                 },
@@ -248,7 +234,7 @@
                     if (newIndex < 0 || newIndex >= list.length) return;
                     const temp = list[index]; list.splice(index, 1); list.splice(newIndex, 0, temp);
                     const flatTasks = [];
-                    Object.values(this.hierarchicalTasks).forEach(rs => { Object.values(rs).forEach(ts => { flatTasks.push(...ts); }); });
+                    Object.values(this.hierarchicalTasks).forEach(rs => { Object.values(rs).forEach(ts => flatTasks.push(...ts)); });
                     await this.apiReq({ action: 'swap', idList: flatTasks.map(t => t.id) });
                 },
                 copyDailyReport() {
@@ -266,7 +252,7 @@
                                 if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
                             } else if (comm.includes("X") || comm.includes("脆")) {
                                 const friend = tasks.find(t => t.title.includes("好友"));
-                                if (friend) segments.push(`${friend.current}${friend.note ? ' (' + friend.friend + ')' : ''}`);
+                                if (friend) segments.push(`${friend.current}${friend.note ? ' (' + friend.note + ')' : ''}`);
                             } else {
                                 const dm = tasks.find(t => t.title.includes("私訊"));
                                 if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
@@ -295,14 +281,6 @@
                     const finalRole = this.selectedRole === 'NEW_ACTION' ? this.customRole : this.selectedRole;
                     await this.apiReq({ action: 'add', community: finalComm, role: finalRole, ...this.newTask });
                     this.showAddModal = false; await this.fetchTasks();
-                }
-            },
-            watch: {
-                selectedCommunity(newVal) {
-                    if (newVal !== 'NEW_ACTION') {
-                        const roles = this.existingRolesForCommunity;
-                        this.selectedRole = roles.length > 0 ? roles[0] : 'NEW_ACTION';
-                    } else this.selectedRole = 'NEW_ACTION';
                 }
             }
         }).mount('#app');
