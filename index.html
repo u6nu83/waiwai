@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Tracker Pro - 全能同步版</title>
+    <title>Task Pro - 終極進化版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -17,52 +17,48 @@
         .group-header, .role-header { cursor: pointer; user-select: none; }
         .arrow-icon { transition: transform 0.3s; }
         .global-note-box { border: 2px dashed #3f3f46; background: #1c1d22; border-radius: 1rem; }
-        /* 同步開關樣式 */
-        .sync-active { border-color: #ff4d4d; color: #ff4d4d; box-shadow: 0 0 10px rgba(255,77,77,0.3); }
     </style>
 </head>
 <body class="p-4 md:p-8 pb-20">
     <div id="app" class="max-w-4xl mx-auto" v-cloak>
-        <header class="flex justify-between items-center mb-4 border-b border-gray-700 pb-4">
-            <h1 class="text-2xl font-bold accent-red italic">TASK PRO</h1>
+        <header class="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
+            <h1 class="text-2xl font-bold accent-red italic tracking-tighter">TASK PRO <span class="text-[10px] bg-red-900 px-2 py-1 rounded ml-2 not-italic text-white">SYNC ONLY</span></h1>
             <div v-if="isAuthenticated" class="flex gap-2">
-                <button @click="copyDailyReport" class="bg-blue-600 px-3 py-2 rounded-lg font-bold text-xs text-white transition">📋 複製日報</button>
+                <button @click="copyDailyReport" class="bg-blue-600 px-3 py-2 rounded-lg font-bold text-xs text-white">📋 複製日報</button>
                 <button @click="resetAllTasks" class="text-[10px] border border-gray-700 px-3 py-2 rounded-lg">重整今日</button>
                 <button @click="openAddModal" class="bg-accent-red px-4 py-2 rounded-lg font-bold text-sm text-white">＋ 新增</button>
             </div>
         </header>
 
-        <div v-if="isAuthenticated" class="flex justify-end mb-6">
-            <button @click="isSyncEnabled = !isSyncEnabled" 
-                    class="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-700 text-xs font-bold transition-all"
-                    :class="{'sync-active': isSyncEnabled}">
-                <span class="w-2 h-2 rounded-full" :class="isSyncEnabled ? 'bg-red-500 animate-pulse' : 'bg-gray-600'"></span>
-                {{ isSyncEnabled ? '全平台同步中' : '獨立打卡模式' }}
-            </button>
-        </div>
-
         <div v-if="isAuthenticated">
             <div v-for="(roles, community) in hierarchicalTasks" :key="community" class="mb-8">
                 <div @click="toggleGroup('comm_' + community)" class="group-header flex justify-between items-center p-3 bg-[#111217] border-b border-red-900 mb-2 rounded-lg">
-                    <h2 class="text-xs font-black text-red-500 uppercase tracking-widest">{{ community }}</h2>
+                    <div class="flex items-center gap-4">
+                        <h2 class="text-xs font-black text-red-500 uppercase tracking-widest">{{ community }}</h2>
+                        <div class="flex border border-red-900/30 rounded overflow-hidden">
+                            <button @click.stop="moveCommunity(community, -1)" class="bg-black/40 px-2 py-0.5 text-[10px] hover:bg-red-900 transition">▲</button>
+                            <button @click.stop="moveCommunity(community, 1)" class="bg-black/40 px-2 py-0.5 text-[10px] hover:bg-red-900 transition">▼</button>
+                        </div>
+                    </div>
                     <span class="arrow-icon text-xs" :class="{'rotate-180': !collapsedGroups['comm_' + community]}">▼</span>
                 </div>
 
                 <div v-show="!collapsedGroups['comm_' + community]">
                     <div v-for="(taskList, roleName) in roles" :key="roleName" class="ml-2 mb-4">
-                        <div class="role-header flex flex-col p-3 rounded-lg border-l-4 border-gray-500 mb-1 bg-[#2d2e36]">
+                        <div class="role-header flex flex-col p-3 rounded-lg border-l-4 border-gray-500 mb-1 bg-[#2d2e36] shadow-md">
                             <div class="flex justify-between items-center" @click="toggleGroup('role_' + community + roleName)">
                                 <span class="text-sm font-bold">👤 {{ roleName }}</span>
                                 <div class="flex items-center gap-2">
-                                    <div class="flex border border-gray-600 rounded-lg overflow-hidden mr-2">
+                                    <div class="flex border border-gray-600 rounded-lg overflow-hidden mr-1">
                                         <button @click.stop="moveRole(community, roleName, -1)" class="bg-gray-800 px-2 py-0.5 text-[10px]">▲</button>
                                         <button @click.stop="moveRole(community, roleName, 1)" class="bg-gray-800 px-2 py-0.5 text-[10px]">▼</button>
                                     </div>
                                     <button @click.stop="editRoleNote(community, roleName, taskList[0].roleNote)" class="text-[10px] text-red-400 border border-red-900 px-2 py-0.5 rounded">狀態</button>
+                                    <button @click.stop="deleteRole(community, roleName)" class="text-[10px] text-gray-500 hover:text-red-500 px-2 py-0.5 border border-gray-700 rounded transition">刪除角色</button>
                                     <span class="arrow-icon text-[10px]" :class="{'rotate-180': !collapsedGroups['role_' + community + roleName]}">▼</span>
                                 </div>
                             </div>
-                            <div v-if="taskList[0].roleNote" class="mt-2 text-[11px] text-yellow-500/80 bg-black/20 p-2 rounded italic">⚠ {{ taskList[0].roleNote }}</div>
+                            <div v-if="taskList[0].roleNote" class="mt-2 text-[11px] text-yellow-500 italic bg-black/20 p-2 rounded">⚠ {{ taskList[0].roleNote }}</div>
                         </div>
 
                         <div v-show="!collapsedGroups['role_' + community + roleName]" class="space-y-3 p-2 bg-[#202127]/50 rounded-b-lg">
@@ -70,25 +66,24 @@
                                 <div class="flex justify-between items-center mb-3">
                                     <h3 class="text-md font-bold" :class="{'text-gray-600 line-through': task.current >= task.total}">{{ task.title }}</h3>
                                     <div class="flex items-center gap-2">
-                                        <input type="number" v-model.number="task.total" @change="updateTaskTotal(task)" class="w-12 text-xs p-1 rounded text-center bg-black/20">
-                                        <div class="flex items-baseline"><span class="text-2xl font-black accent-red" :class="{'text-gray-600': task.current >= task.total}">{{ task.current }}</span><span class="text-gray-600 text-sm">/{{ task.total }}</span></div>
+                                        <input type="number" v-model.number="task.total" @change="updateTaskTotal(task)" class="w-12 text-xs p-1 rounded text-center">
+                                        <div class="flex items-baseline"><span class="text-2xl font-black accent-red">{{ task.current }}</span><span class="text-gray-600 text-sm">/{{ task.total }}</span></div>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <div class="flex gap-2">
-                                        <button @click="handleProgress(task, 'minus')" :disabled="task.current <= 0" class="bg-gray-700 px-3 py-1.5 rounded text-sm font-bold">－</button>
-                                        <button @click="handleProgress(task, 'plus')" :disabled="task.current >= task.total" 
-                                                class="px-5 py-1.5 rounded text-sm font-black active:scale-95 transition"
-                                                :class="task.current >= task.total ? 'bg-gray-600 text-gray-400' : 'bg-accent-red text-white'">
-                                            {{ task.current >= task.total ? 'DONE' : '＋ 打卡' }}
+                                        <button @click="handleSyncProgress(task, 'minus')" :disabled="task.current <= 0" class="bg-gray-700 px-3 py-1.5 rounded text-sm font-bold shadow-inner">－</button>
+                                        <button @click="handleSyncProgress(task, 'plus')" :disabled="task.current >= task.total" 
+                                                class="px-5 py-1.5 rounded text-sm font-black transition bg-accent-red text-white active:scale-95 disabled:bg-gray-600 disabled:text-gray-400">
+                                            {{ task.current >= task.total ? 'DONE' : '＋ 同步打卡' }}
                                         </button>
                                         <div class="flex border border-gray-700 rounded-lg overflow-hidden">
                                             <button @click="moveTaskInGroup(taskList, tIdx, -1)" class="bg-gray-800 px-2 py-1 text-[10px]">▲</button>
                                             <button @click="moveTaskInGroup(taskList, tIdx, 1)" class="bg-gray-800 px-2 py-1 text-[10px]">▼</button>
                                         </div>
-                                        <button @click="editTaskNote(task)" class="bg-gray-800 px-3 py-1 rounded text-[10px] text-gray-400 transition">📝</button>
+                                        <button @click="editTaskNote(task)" class="bg-gray-800 px-3 py-1 rounded text-[10px] text-gray-400">📝</button>
                                     </div>
-                                    <button @click="deleteTask(task.id)" class="text-[10px] text-gray-700">Delete</button>
+                                    <button @click="deleteTask(task.id)" class="text-[10px] text-gray-700 hover:text-red-500">Delete Task</button>
                                 </div>
                                 <p v-if="task.note" class="text-[11px] text-gray-500 mt-2 italic border-t border-gray-800 pt-1">備註: {{ task.note }}</p>
                             </div>
@@ -98,7 +93,7 @@
             </div>
 
             <div class="mt-20 global-note-box overflow-hidden">
-                <div @click="toggleGroup('global_note')" class="p-4 flex justify-between items-center cursor-pointer">
+                <div @click="toggleGroup('global_note')" class="p-4 flex justify-between items-center cursor-pointer hover:bg-white/5 transition">
                     <h2 class="text-sm font-black text-gray-400 tracking-[0.3em] uppercase italic">Global Notebook</h2>
                     <span class="arrow-icon text-xs text-gray-600" :class="{'rotate-180': !collapsedGroups['global_note']}">▼</span>
                 </div>
@@ -110,19 +105,19 @@
         </div>
 
         <div v-if="!isAuthenticated" class="text-center mt-20">
-            <div class="bg-[#25262c] p-8 rounded-xl border border-gray-800 inline-block w-full max-w-sm shadow-2xl">
+            <div class="bg-[#25262c] p-8 rounded-xl border border-gray-800 inline-block w-full max-w-sm">
                 <input type="password" v-model="inputPassword" class="p-3 rounded-lg w-full text-center mb-4" placeholder="Password" @keyup.enter="saveAuth">
                 <button @click="saveAuth" class="bg-accent-red w-full py-3 rounded-lg font-bold text-white shadow-md">進入系統</button>
             </div>
         </div>
 
         <div v-if="showNoteModal" class="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-md">
-            <div class="bg-[#25262c] p-6 rounded-xl w-full max-w-sm border border-gray-700">
+            <div class="bg-[#25262c] p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
                 <h2 class="text-lg font-bold mb-4 accent-red italic">{{ noteModalTitle }}</h2>
                 <textarea v-model="tempNote" class="w-full h-32 p-3 rounded-lg mb-6 outline-none focus:border-red-500"></textarea>
                 <div class="flex justify-end gap-4">
                     <button @click="showNoteModal = false" class="text-gray-500 font-bold uppercase text-xs">Cancel</button>
-                    <button @click="saveNote" class="bg-accent-red px-6 py-2 rounded font-bold text-white">儲存內容</button>
+                    <button @click="saveNote" class="bg-accent-red px-6 py-2 rounded font-bold text-white shadow-lg">儲存內容</button>
                 </div>
             </div>
         </div>
@@ -162,7 +157,6 @@
                     isAuthenticated: false, inputPassword: '', loading: false, showAddModal: false,
                     showNoteModal: false, noteModalTitle: '', tempNote: '', activeTarget: null,
                     tasks: [], collapsedGroups: {'global_note': true}, globalNote: '',
-                    isSyncEnabled: false, // 💡 同步模式狀態
                     selectedCommunity: '', customCommunity: '', selectedRole: '', customRole: '',
                     newTask: { title: '', total: 1, note: '' }
                 }
@@ -186,7 +180,6 @@
             methods: {
                 toggleGroup(id) { this.collapsedGroups[id] = !this.collapsedGroups[id]; },
                 saveAuth() { localStorage.setItem('api_pwd', this.inputPassword); this.isAuthenticated = true; this.fetchTasks(); },
-                clearAuth() { localStorage.removeItem('api_pwd'); location.reload(); },
                 async apiReq(payload) {
                     this.loading = true;
                     try {
@@ -205,54 +198,38 @@
                         });
                     }
                 },
-                // 💡 處理打卡進度 (包含同步邏輯)
-                async handleProgress(task, direction) {
-                    if (this.isSyncEnabled) {
-                        // 同步模式
-                        await this.apiReq({ 
-                            action: 'sync_update', 
-                            title: task.title, 
-                            direction: direction 
-                        });
-                    } else {
-                        // 獨立模式
-                        if (direction === 'plus') task.current++;
-                        else task.current--;
-                        await this.apiReq({ action: 'update', id: task.id, current: task.current });
-                    }
+                // 💡 全平台同步打卡
+                async handleSyncProgress(task, direction) {
+                    await this.apiReq({ action: 'sync_update', title: task.title, direction: direction });
                     await this.fetchTasks();
                 },
-                async updateTaskTotal(task) { await this.apiReq({ action: 'update_total', id: task.id, total: task.total }); },
-                async deleteTask(id) { if (confirm("刪除？")) { await this.apiReq({ action: 'delete', id: id }); await this.fetchTasks(); } },
-                async resetAllTasks() { if (confirm("重整進度？")) { await this.apiReq({ action: 'resetAll' }); await this.fetchTasks(); } },
-                copyDailyReport() {
-                    const dateStr = new Date().toLocaleDateString();
-                    let reportText = `Amelie (${dateStr})工作事項\n\n`;
-                    Object.keys(this.hierarchicalTasks).forEach(comm => {
-                        const roles = this.hierarchicalTasks[comm];
-                        Object.keys(roles).forEach(roleName => {
-                            const tasks = roles[roleName];
-                            let segments = [];
-                            if (comm.includes("臉書")) {
-                                const addGroup = tasks.find(t => t.title.includes("加社團"));
-                                const dm = tasks.find(t => t.title.includes("私訊"));
-                                if (addGroup) segments.push(`${addGroup.current}${addGroup.note ? ' (' + addGroup.note + ')' : ''}`);
-                                if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
-                            } else if (comm.includes("X") || comm.includes("脆")) {
-                                const friend = tasks.find(t => t.title.includes("好友"));
-                                if (friend) segments.push(`${friend.current}${friend.note ? ' (' + friend.note + ')' : ''}`);
-                            } else {
-                                const dm = tasks.find(t => t.title.includes("私訊"));
-                                if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
-                            }
-                            if (segments.length > 0) reportText += `${comm} (${roleName})：${segments.join(' / ')}\n`;
+                // 💡 刪除角色核心邏輯
+                async deleteRole(community, role) {
+                    if (confirm(`確定要刪除「${community}」下的角色「${role}」嗎？這會連同該角色所有任務一併刪除！`)) {
+                        await this.apiReq({ action: 'delete_role', community: community, role: role });
+                        await this.fetchTasks();
+                    }
+                },
+                // 💡 社群平台排序邏輯
+                async moveCommunity(community, direction) {
+                    const commOrder = Object.keys(this.hierarchicalTasks);
+                    const index = commOrder.indexOf(community);
+                    const newIndex = index + direction;
+                    if (newIndex < 0 || newIndex >= commOrder.length) return;
+
+                    const temp = commOrder[index];
+                    commOrder.splice(index, 1);
+                    commOrder.splice(newIndex, 0, temp);
+
+                    const newFlatTasks = [];
+                    commOrder.forEach(c => {
+                        Object.values(this.hierarchicalTasks[c]).forEach(roleTasks => {
+                            newFlatTasks.push(...roleTasks);
                         });
                     });
-                    const el = document.createElement('textarea'); el.value = reportText;
-                    document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-                    alert("日報已複製！");
+                    this.tasks = newFlatTasks;
+                    await this.apiReq({ action: 'swap', idList: this.tasks.map(t => t.id) });
                 },
-                async saveGlobalNote() { await this.apiReq({ action: 'save_global_note', noteText: this.globalNote }); alert("儲存成功！"); },
                 async moveRole(community, roleName, direction) {
                     const rolesInComm = Object.keys(this.hierarchicalTasks[community]);
                     const index = rolesInComm.indexOf(roleName);
@@ -274,19 +251,50 @@
                     Object.values(this.hierarchicalTasks).forEach(rs => { Object.values(rs).forEach(ts => { flatTasks.push(...ts); }); });
                     await this.apiReq({ action: 'swap', idList: flatTasks.map(t => t.id) });
                 },
-                openAddModal() { this.showAddModal = true; if (this.existingCommunities.length > 0) this.selectedCommunity = this.existingCommunities[0]; else this.selectedCommunity = 'NEW_ACTION'; },
-                async addTask() {
-                    const finalComm = this.selectedCommunity === 'NEW_ACTION' ? this.customCommunity : this.selectedCommunity;
-                    const finalRole = this.selectedRole === 'NEW_ACTION' ? this.customRole : this.selectedRole;
-                    await this.apiReq({ action: 'add', community: finalComm, role: finalRole, ...this.newTask });
-                    this.showAddModal = false; await this.fetchTasks();
+                copyDailyReport() {
+                    const dateStr = new Date().toLocaleDateString();
+                    let reportText = `Amelie (${dateStr})工作事項\n\n`;
+                    Object.keys(this.hierarchicalTasks).forEach(comm => {
+                        const roles = this.hierarchicalTasks[comm];
+                        Object.keys(roles).forEach(roleName => {
+                            const tasks = roles[roleName];
+                            let segments = [];
+                            if (comm.includes("臉書")) {
+                                const addGroup = tasks.find(t => t.title.includes("加社團"));
+                                const dm = tasks.find(t => t.title.includes("私訊"));
+                                if (addGroup) segments.push(`${addGroup.current}${addGroup.note ? ' (' + addGroup.note + ')' : ''}`);
+                                if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
+                            } else if (comm.includes("X") || comm.includes("脆")) {
+                                const friend = tasks.find(t => t.title.includes("好友"));
+                                if (friend) segments.push(`${friend.current}${friend.note ? ' (' + friend.friend + ')' : ''}`);
+                            } else {
+                                const dm = tasks.find(t => t.title.includes("私訊"));
+                                if (dm) segments.push(`${dm.current}${dm.note ? ' (' + dm.note + ')' : ''}`);
+                            }
+                            if (segments.length > 0) reportText += `${comm} (${roleName})：${segments.join(' / ')}\n`;
+                        });
+                    });
+                    const el = document.createElement('textarea'); el.value = reportText;
+                    document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+                    alert("日報已複製！");
                 },
+                async saveGlobalNote() { await this.apiReq({ action: 'save_global_note', noteText: this.globalNote }); alert("儲存成功！"); },
+                async updateTaskTotal(task) { await this.apiReq({ action: 'update_total', id: task.id, total: task.total }); },
+                async deleteTask(id) { if (confirm("刪除任務？")) { await this.apiReq({ action: 'delete', id: id }); await this.fetchTasks(); } },
+                async resetAllTasks() { if (confirm("重整進度？")) { await this.apiReq({ action: 'resetAll' }); await this.fetchTasks(); } },
                 editRoleNote(comm, role, note) { this.noteModalTitle = `角色狀態: ${role}`; this.tempNote = note; this.activeTarget = { type: 'role', community: comm, role: role }; this.showNoteModal = true; },
                 editTaskNote(task) { this.noteModalTitle = `任務備註: ${task.title}`; this.tempNote = task.note; this.activeTarget = { type: 'task', id: task.id }; this.showNoteModal = true; },
                 async saveNote() {
                     if (this.activeTarget.type === 'role') await this.apiReq({ action: 'update_role_note', community: this.activeTarget.community, role: this.activeTarget.role, roleNote: this.tempNote });
                     else await this.apiReq({ action: 'update', id: this.activeTarget.id, note: this.tempNote });
                     this.showNoteModal = false; await this.fetchTasks();
+                },
+                openAddModal() { this.showAddModal = true; if (this.existingCommunities.length > 0) this.selectedCommunity = this.existingCommunities[0]; else this.selectedCommunity = 'NEW_ACTION'; },
+                async addTask() {
+                    const finalComm = this.selectedCommunity === 'NEW_ACTION' ? this.customCommunity : this.selectedCommunity;
+                    const finalRole = this.selectedRole === 'NEW_ACTION' ? this.customRole : this.selectedRole;
+                    await this.apiReq({ action: 'add', community: finalComm, role: finalRole, ...this.newTask });
+                    this.showAddModal = false; await this.fetchTasks();
                 }
             },
             watch: {
