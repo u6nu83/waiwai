@@ -3,20 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Tracker Pro - 獨立運算版</title>
+    <title>Task Pro - 高速反應版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #191a1f; color: #e0e0e0; font-family: sans-serif; }
         .accent-red { color: #ff4d4d; }
         .bg-accent-red { background-color: #ff4d4d; }
-        .card { background: #25262c; border-left: 4px solid #ff4d4d; }
+        .card { background: #25262c; border-left: 4px solid #ff4d4d; transition: opacity 0.3s; }
         .card.is-finished { border-left-color: #4b5563; }
         [v-cloak] { display: none; }
         input, select, textarea { background: #2d2e36 !important; border: 1px solid #3f3f46 !important; color: white !important; }
         .group-header, .role-header { cursor: pointer; user-select: none; }
         .arrow-icon { transition: transform 0.3s; }
         .global-note-box { border: 2px dashed #3f3f46; background: #1c1d22; border-radius: 1rem; }
+        /* 增加打卡時的微動效 */
+        .btn-press { transform: scale(0.95); transition: transform 0.1s; }
     </style>
 </head>
 <body class="p-4 md:p-8 pb-20">
@@ -24,15 +26,16 @@
         <header class="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
             <h1 class="text-2xl font-bold accent-red italic">TASK PRO</h1>
             <div v-if="isAuthenticated" class="flex gap-2">
-                <button @click="copyDailyReport" class="bg-blue-600 px-3 py-2 rounded-lg font-bold text-xs text-white transition">📋 複製日報</button>
-                <button @click="resetAllTasks" class="text-[10px] border border-gray-700 px-3 py-2 rounded-lg">重整今日</button>
+                <button @click="copyDailyReport" class="bg-blue-600 px-3 py-2 rounded-lg font-bold text-xs text-white">📋 複製日報</button>
+                <!-- <button @click="fetchTasks" class="text-[10px] border border-gray-700 px-3 py-2 rounded-lg">手動刷新</button> -->
+                <button @click="resetAllTasks" class="text-[10px] border border-gray-700 px-3 py-2 rounded-lg text-red-400">重整進度</button>
                 <button @click="openAddModal" class="bg-accent-red px-4 py-2 rounded-lg font-bold text-sm text-white">＋ 新增</button>
             </div>
         </header>
 
         <div v-if="isAuthenticated">
             <div v-for="(roles, community) in hierarchicalTasks" :key="community" class="mb-8">
-                <div @click="toggleGroup('comm_' + community)" class="group-header flex justify-between items-center p-3 bg-[#111217] border-b border-red-900 mb-2 rounded-lg shadow-lg">
+                <div @click="toggleGroup('comm_' + community)" class="group-header flex justify-between items-center p-3 bg-[#111217] border-b border-red-900 mb-2 rounded-lg">
                     <div class="flex items-center gap-4">
                         <h2 class="text-xs font-black text-red-500 uppercase tracking-widest">{{ community }}</h2>
                         <div class="flex border border-red-900/30 rounded overflow-hidden">
@@ -72,7 +75,7 @@
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <div class="flex gap-2">
-                                        <button @click="handleProgress(task, 'minus')" :disabled="task.current <= 0" class="bg-gray-700 px-3 py-1.5 rounded text-sm font-bold shadow-inner">－</button>
+                                        <button @click="handleProgress(task, 'minus')" :disabled="task.current <= 0" class="bg-gray-700 px-3 py-1.5 rounded text-sm font-bold shadow-inner active:scale-90">－</button>
                                         <button @click="handleProgress(task, 'plus')" :disabled="task.current >= task.total" 
                                                 class="px-5 py-1.5 rounded text-sm font-black active:scale-95 transition shadow-lg"
                                                 :class="task.current >= task.total ? 'bg-gray-600 text-gray-400' : 'bg-accent-red text-white'">
@@ -99,8 +102,8 @@
                     <span class="arrow-icon text-xs text-gray-600" :class="{'rotate-180': !collapsedGroups['global_note']}">▼</span>
                 </div>
                 <div v-show="!collapsedGroups['global_note']" class="p-4 border-t border-gray-800">
-                    <textarea v-model="globalNote" class="w-full h-64 p-5 rounded-xl border border-gray-800 leading-relaxed text-sm focus:border-red-500 outline-none mb-4" placeholder="在此輸入筆記..."></textarea>
-                    <button @click="saveGlobalNote" class="w-full bg-accent-red py-3 rounded-lg font-bold text-white shadow-lg transition active:scale-95">儲存筆記內容</button>
+                    <textarea v-model="globalNote" class="w-full h-64 p-5 rounded-xl border border-gray-800 leading-relaxed text-sm focus:border-red-500 outline-none mb-4" placeholder="在此輸入內容..."></textarea>
+                    <button @click="saveGlobalNote" class="w-full bg-accent-red py-3 rounded-lg font-bold text-white shadow-lg transition active:scale-95">儲存內容</button>
                 </div>
             </div>
         </div>
@@ -127,15 +130,21 @@
             <div class="bg-[#25262c] p-8 rounded-2xl w-full max-w-md border border-gray-700 shadow-2xl">
                 <h2 class="text-xl font-black mb-6 accent-red border-b border-gray-800 pb-2">NEW TASK</h2>
                 <div class="space-y-4">
-                    <select v-model="selectedCommunity" class="w-full p-3 rounded-lg outline-none focus:border-red-500"><option v-for="c in existingCommunities" :value="c">{{ c }}</option><option value="NEW_ACTION">＋ 新增社群平台...</option></select>
+                    <select v-model="selectedCommunity" class="w-full p-3 rounded-lg outline-none focus:border-red-500">
+                        <option v-for="c in existingCommunities" :value="c">{{ c }}</option>
+                        <option value="NEW_ACTION">＋ 新增社群平台...</option>
+                    </select>
                     <input v-if="selectedCommunity === 'NEW_ACTION'" v-model="customCommunity" class="w-full p-3 rounded-lg border-red-500 border-dashed border-2 bg-transparent" placeholder="新社群名稱">
-                    <select v-model="selectedRole" class="w-full p-3 rounded-lg outline-none focus:border-red-500"><option v-for="r in existingRolesForCommunity" :value="r">{{ r }}</option><option value="NEW_ACTION">＋ 新增角色...</option></select>
+                    <select v-model="selectedRole" class="w-full p-3 rounded-lg outline-none focus:border-red-500">
+                        <option v-for="r in existingRolesForCommunity" :value="r">{{ r }}</option>
+                        <option value="NEW_ACTION">＋ 新增角色...</option>
+                    </select>
                     <input v-if="selectedRole === 'NEW_ACTION'" v-model="customRole" class="w-full p-3 rounded-lg border-red-500 border-dashed border-2 bg-transparent" placeholder="新角色名稱">
                     <input v-model="newTask.title" class="w-full p-3 rounded-lg outline-none focus:border-red-500" placeholder="任務名稱">
                     <input type="number" v-model.number="newTask.total" class="w-full p-3 rounded-lg outline-none focus:border-red-500" placeholder="目標次數">
                 </div>
                 <div class="flex justify-end gap-6 mt-10">
-                    <button @click="showAddModal = false" class="text-gray-500 font-bold text-xs">Cancel</button>
+                    <button @click="showAddModal = false" class="text-gray-500 font-bold text-xs uppercase">Cancel</button>
                     <button @click="addTask" class="bg-accent-red px-10 py-3 rounded-lg font-black text-white shadow-lg">CONFIRM</button>
                 </div>
             </div>
@@ -176,9 +185,14 @@
                 toggleGroup(id) { this.collapsedGroups[id] = !this.collapsedGroups[id]; },
                 saveAuth() { localStorage.setItem('api_pwd', this.inputPassword); this.isAuthenticated = true; this.fetchTasks(); },
                 async apiReq(payload) {
-                    this.loading = true;
+                    // 為了不影響操作感，我們只在非打卡操作時顯示全螢幕 Loading
+                    if (payload.action !== 'update') this.loading = true;
                     try {
-                        const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ password: localStorage.getItem('api_pwd'), ...payload }) });
+                        const res = await fetch(API_URL, { 
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                            body: JSON.stringify({ password: localStorage.getItem('api_pwd'), ...payload }) 
+                        });
                         return await res.json();
                     } finally { this.loading = false; }
                 },
@@ -193,12 +207,32 @@
                         });
                     }
                 },
-                // 💡 修正：完全獨立打卡
+                // 💡 樂觀更新：核心修正處
                 async handleProgress(task, direction) {
-                    if (direction === 'plus') task.current++;
-                    else task.current--;
-                    await this.apiReq({ action: 'update', id: task.id, current: task.current });
-                    await this.fetchTasks();
+                    // 1. 立即變更畫面數字 (樂觀更新)
+                    const oldVal = task.current;
+                    if (direction === 'plus' && task.current < task.total) task.current++;
+                    else if (direction === 'minus' && task.current > 0) task.current--;
+                    else return;
+
+                    // 2. 在背景發送請求給 Google，不等待回傳，也不重新抓取資料
+                    try {
+                        const res = await fetch(API_URL, { 
+                            method: 'POST', 
+                            mode: 'no-cors', // 使用 no-cors 提速且不等待回傳資料
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                            body: JSON.stringify({ 
+                                password: localStorage.getItem('api_pwd'), 
+                                action: 'update', 
+                                id: task.id, 
+                                current: task.current 
+                            }) 
+                        });
+                    } catch (e) {
+                        // 如果真的失敗了，才把數字退回去
+                        task.current = oldVal;
+                        alert("連線失敗，請檢查網路！");
+                    }
                 },
                 async deleteRole(community, role) {
                     if (confirm(`確定刪除「${community}」的角色「${role}」？`)) {
@@ -267,7 +301,7 @@
                 async saveGlobalNote() { await this.apiReq({ action: 'save_global_note', noteText: this.globalNote }); alert("儲存成功！"); },
                 async updateTaskTotal(task) { await this.apiReq({ action: 'update_total', id: task.id, total: task.total }); },
                 async deleteTask(id) { if (confirm("刪除任務？")) { await this.apiReq({ action: 'delete', id: id }); await this.fetchTasks(); } },
-                async resetAllTasks() { if (confirm("重整進度？")) { await this.apiReq({ action: 'resetAll' }); await this.fetchTasks(); } },
+                async resetAllTasks() { if (confirm("確定重整進度？這會把雲端與本地端全部歸零！")) { await this.apiReq({ action: 'resetAll' }); await this.fetchTasks(); } },
                 editRoleNote(comm, role, note) { this.noteModalTitle = `角色狀態: ${role}`; this.tempNote = note; this.activeTarget = { type: 'role', community: comm, role: role }; this.showNoteModal = true; },
                 editTaskNote(task) { this.noteModalTitle = `任務備註: ${task.title}`; this.tempNote = task.note; this.activeTarget = { type: 'task', id: task.id }; this.showNoteModal = true; },
                 async saveNote() {
@@ -281,6 +315,14 @@
                     const finalRole = this.selectedRole === 'NEW_ACTION' ? this.customRole : this.selectedRole;
                     await this.apiReq({ action: 'add', community: finalComm, role: finalRole, ...this.newTask });
                     this.showAddModal = false; await this.fetchTasks();
+                }
+            },
+            watch: {
+                selectedCommunity(newVal) {
+                    if (newVal !== 'NEW_ACTION') {
+                        const roles = this.existingRolesForCommunity;
+                        this.selectedRole = roles.length > 0 ? roles[0] : 'NEW_ACTION';
+                    } else this.selectedRole = 'NEW_ACTION';
                 }
             }
         }).mount('#app');
